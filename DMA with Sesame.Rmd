@@ -2,17 +2,18 @@
 title: "DMA with Sesame"
 author: "Xiaoyu Yan"
 date: "2/3/2020"
-output: rmarkdown::github_document
+output: rmdformats::html_clean
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 library(sesame)
 library(unpivotr)
 library(tidyverse)
+library(gridExtra)
 data_dir <- "~/Desktop/Graduate/MethData/"
 ```
 
@@ -39,9 +40,9 @@ write.table(tumor_gland_dir,file = "tumor_gland_dir.sh", quote = F, row.names = 
 
 ## Idat file classification
 
-```{bash eval=FALSE, include=FALSE}
+```{bash}
 cd ~/Downloads/MethData
-sh ~/Desktop/Graduate/DifferentialMethyaltionAnalysis/tumor_gland_dir.sh
+sh ~/Desktop/Graduate/DifferentialMethylationAnalysis/tumor_gland_dir.sh
 ```
 
 ## Read data & Get betas
@@ -83,7 +84,7 @@ bcc <- vapply(ssets, bisConversionControl, numeric(1))
 
 ## Visualization
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # Visualize all probes from a gene
 visualizeGene('DNMT1', betas, platform='EPIC')
 # Visualize probes from arbitrary region
@@ -106,25 +107,39 @@ tumor_gland_segs <- segs
 
 ## Comparision
 
-```{r}
-A <- tumor_gland %>% filter(grepl("A", sample_id)) %>% select(plate, sentrix_id, sentrix_position)
-B <- tumor_gland %>% filter(grepl("B", sample_id)) %>% select(plate, sentrix_id, sentrix_position) 
-A
-```
+### A side & B side
 
 ```{r}
+# copy number variation plot function
 CNV <- function(x) {cnSegmentation(ssets[[x]], ssets.normal) %>%
   visualizeSegments()
 }
 ```
 
-```{r}
-CNV(1)
-CNV(2)
+```{r message=FALSE, warning=FALSE}
+# look up sample ID
+A <- tumor_gland %>% filter(grepl("A", sample_id)) %>% select(plate, sentrix_id, sentrix_position)
+
+which(grepl("A", tumor_gland$sample_id))
+tumor_gland$sample_id[which(grepl("A", tumor_gland$sample_id))]
 ```
+
 ```{r}
-CNV(3)
-CNV(4)
+library(gbm)
+# individual 
+grid.arrange(CNV(1), CNV(2), CNV(3), CNV(4), CNV(5), CNV(6), CNV(7), CNV(8), CNV(9), CNV(10), CNV(11), CNV(12), CNV(13), CNV(14), CNV(15), CNV(16), CNV(17), CNV(18), CNV(19), CNV(20), nrow = 6, ncol = 4)
+```
+
+```{r}
+# individual S
+grid.arrange(CNV(5), CNV(6), CNV(7), CNV(8), nrow = 2, ncol = 2)
+```
+
+
+```{r}
+# individual P
+grid.arrange(CNV(1), CNV(2), CNV(3), CNV(4), nrow = 2, ncol = 2)
+```
 ```
 
 # Colon crypt
@@ -146,7 +161,7 @@ write.table(colon_crypt_dir,file = "colon_crypt_dir.sh", quote = F, row.names = 
 
 ## Idat file classification
 
-```{bash eval=FALSE, include=FALSE}
+```{bash include=FALSE}
 cd ~/Downloads/MethData
 sh ~/Desktop/Graduate/DMA/colon_crypt_dir.sh
 ```
@@ -313,7 +328,7 @@ write.table(endom_gland_dir,file = "endom_gland_dir.sh", quote = F, row.names = 
 
 ## Idat file classification
 
-```{bash eval=FALSE, include=FALSE}
+```{bash}
 cd ~/Downloads/MethData
 sh ~/Desktop/Graduate/DMA/endom_gland_dir.sh
 ```
@@ -358,7 +373,7 @@ bcc <- vapply(ssets, bisConversionControl, numeric(1))
 ## Visualization
 
 ```{r}
-# Visualize all probes from a gene
+# Visualize all probes from DNA methyltransferase 1
 visualizeGene('DNMT1', betas, platform='EPIC')
 # Visualize probes from arbitrary region
 visualizeRegion(
@@ -379,7 +394,7 @@ endom_gland_segs <- segs
 
 # Bulk Sample
 
-```{r eval=FALSE, include=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 bulk_sample <- directory %>% filter(description == "bulk")
 write.table(bulk_sample, file = "bulk_sample_dir.csv", quote = F, sep = ",", row.names = F)
 
@@ -440,7 +455,7 @@ bcc <- vapply(ssets, bisConversionControl, numeric(1))
 ## Visualization
 
 ```{r}
-# Visualize all probes from a gene
+# Visualize all probes from DNA methyltransferase 1
 visualizeGene('DNMT1', betas, platform='EPIC')
 # Visualize probes from arbitrary region
 visualizeRegion(
