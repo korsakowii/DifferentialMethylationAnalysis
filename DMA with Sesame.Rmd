@@ -2,9 +2,9 @@
 title: "DMA with Sesame"
 author: "Xiaoyu Yan"
 date: "2/3/2020"
-output:
-  md_document:
-    variant: markdown_github
+output: 
+  github_document:
+  toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -129,7 +129,7 @@ tumor_gland$sample_id[which(grepl("A", tumor_gland$sample_id))]
 ```{r}
 library(gbm)
 # individual 
-grid.arrange(CNV(1), CNV(2), CNV(3), CNV(4), CNV(5), CNV(6), CNV(7), CNV(8), CNV(9), CNV(10), CNV(11), CNV(12), CNV(13), CNV(14), CNV(15), CNV(16), CNV(17), CNV(18), CNV(19), CNV(20), nrow = 6, ncol = 4)
+grid.arrange(CNV(1), CNV(2), CNV(3), CNV(4), CNV(5), CNV(6), CNV(7), CNV(8), CNV(9), CNV(10), CNV(11), CNV(12), CNV(13), CNV(14), CNV(15), CNV(16), CNV(17), CNV(18), CNV(19), CNV(20), nrow = 5, ncol = 4)
 ```
 
 ```{r}
