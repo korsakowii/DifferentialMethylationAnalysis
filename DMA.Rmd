@@ -1,0 +1,194 @@
+---
+title: "DMA workflow"
+author: "Xiaoyu Yan"
+date: "1/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Load the packages, results='hide', echo=FALSE}
+library(limma)
+library(minfi)
+library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19) #2017
+library(IlluminaHumanMethylationEPICmanifest) 
+library(RColorBrewer)
+library(missMethyl)
+library(matrixStats)
+library(minfiData)
+library(Gviz)
+library(DMRcate)
+library(stringr)
+library(methylationArrayAnalysis)
+```
+```{r Read the Data, echo=FALSE, results='hide', cache=TRUE}
+# idat files directory
+#dataDirectory <- "~/Downloads/MethData"
+dataDirectory <- "~/Desktop/Graduate/MethData"
+head(list.files(dataDirectory, recursive = TRUE))
+# read sample sheet
+## note: make sure the last row of .csv is empty
+targets <- read.metharray.sheet(dataDirectory)
+## I delete the original "basename" column and renamed "terminus" to "senrix_position". I found there are 4 slides in the sheet have no idat files, also 1 slide in idata file does not have sample information. These samples are excluded.
+targets <- targets[-which(targets$Basename == "character(0)"),]
+head(targets)
+# get annotation
+annEPIC = getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+#head(annEPIC)
+
+# read idat data
+rgSet <- read.metharray.exp(targets = targets, force = TRUE)
+# rename sample with description
+targets$ID <- paste(targets$description, targets$sample_id, sep = ".")
+sampleNames(rgSet) <- targets$ID
+```
+
+```{r Quality Control}
+# calculate the detection p-values
+detP <- detectionP(rgSet)
+head(detP)
+which(colMeans(detP)>0.05)
+# bulk.JA: 54
+which(colMeans(detP)>0.01)
+# 33F G5P5.US 18: 195 
+which(colMeans(detP)>0.005)
+# xenograft clonal.SW480 XENO 1B: 104 
+#tumor gland.CB LL: 74 
+#tumor gland.HBLL-3: 70
+which(colMeans(detP)>0.003)
+#tumor gland.HALL-1: 68
+#tumor gland.HALL-2: 68
+#tumor gland.FA LL: 74        
+#32 G2P2.UR5:205
+```
+
+```{r visualize}
+# examine mean detection p-values across all samples to identify any failed samples
+library(viridis)
+pal <- viridis(212)
+#par(mfrow=c(1,2))
+barplot(colMeans(detP), col = pal[factor(targets$ID)], las=2, cex.axis = 0.6, 
+        cex.names = 0.6, ylab = "Mean detection p-values")
+abline(h=0.05, col = "red")
+#legend("topright", legend = levels(factor(targets$description)), fill = pal, ncol = 3, cex = 0.5)
+# scrutinize on 0.002 scale
+barplot(colMeans(detP), col = pal[factor(targets$ID)], las=2, cex.axis = 0.6, 
+        cex.names = 0.6 , ylim = c(0, 0.002), ylab = "Mean detection p-values")
+abline(h=0.05, col = "red")
+#legend("topleft", legend = levels(factor(targets$description)), fill = pal, bg = "white")
+
+```
+```{r}
+densityPlot(detP, sampGroups = targets$description, main = "Beta",
+        xlab = "Beta", xlim = c(0, 1), ylim = c(0, 0.08), legend = FALSE)
+```
+```{r}
+stripplot()
+bwplot()
+```
+
+```{r}
+qcReport(rgSet, pdf="qcReport.pdf")
+```
+
+```{r}
+function (rgSet, sampNames = NULL, sampGroups = NULL, pdf = "qcReport.pdf", 
+    maxSamplesPerPage = 24, controls = c("BISULFITE CONVERSION I", 
+        "BISULFITE CONVERSION II", "EXTENSION", "HYBRIDIZATION", 
+        "NON-POLYMORPHIC", "SPECIFICITY I", "SPECIFICITY II", 
+        "TARGET REMOVAL")) 
+{
+    .isRGOrStop(rgSet)
+    if (is.null(sampNames)) 
+        sampNames <- colnames(rgSet)
+    n <- ncol(rgSet)
+    o <- rev(order(sampNames))
+    rgSet <- rgSet[, o]
+    sampNames <- sampNames[o]
+    
+    if (is.null(sampGroups)) 
+        sampGroups <- rep(1, n)
+    sampGroups <- sampGroups[o]
+    sampGroups <- as.factor(sampGroups)
+    
+    numPages <- ceiling(n/maxSamplesPerPage)
+    samplesPerPage <- ceiling(n/numPages)
+    sampleIdxs <- suppressWarnings(split(seq_len(n), rep(seq_len(numPages), 
+        each = samplesPerPage)))
+    pdf(file = pdf, width = 8, height = 11)
+    
+    par(mfrow = c(2, 1))
+    densityPlot(rgSet, sampGroups = sampGroups, main = "Beta", 
+        xlab = "Beta")
+    plot.new()
+    par(mfrow = c(1, 1), oma = c(2, 10, 1, 1))
+    for (sampleIdx in sampleIdxs) {
+        densityBeanPlot(dat = rgSet[, sampleIdx], sampGroups = sampGroups[sampleIdx], 
+            sampNames = sampNames[sampleIdx])
+    }
+    for (controlType in controls) {
+        for (sampleIdx in sampleIdxs) {
+            controlStripPlot(rgSet = rgSet[, sampleIdx], sampNames = sampNames[sampleIdx], 
+                controls = controlType)
+        }
+    }
+    dev.off()
+}
+```
+
+```{r}
+# remove poor quality samples
+keep <- colMeans(detP) < 0.003
+rgSet <- rgSet[, keep]
+rgSet
+```
+
+```{r}
+# remove poor quality samples from targets data
+targets <- targets[keep,]
+```
+
+```{r}
+# remove poor quality samples from detection p-value table
+detP <- detP[, keep]
+dim(detP)
+```
+```{r}
+densityPlot(detP, sampGroups = targets$description, main = "Beta",
+        xlab = "Beta", xlim = c(0, 1), ylim = c(0, 0.7), legend = FALSE)
+```
+
+```{r Normalization}
+# create a MethylSet obj from the raw data
+rgSet <- read.metharray.exp(targets = targets, force = TRUE)
+mSetRaw <- preprocessRaw(rgSet)
+# normalize the Data --> GenomicRatioSet obj
+mSetSq <- preprocessFunnorm(rgSet)   # diff cell type
+mSetSq <- preprocessQuantile(rgSet) # same cell type
+```{r}
+```{r}
+# visualize
+par(mfrow=c(1,2))
+densityPlot(rgSet, sampleGroups = targets$description, main = "Raw", legend = FALSE)
+legend("top", legend = levels(factor(targets$description)), text.col = viridis(212))
+
+densityPlot(getBeta(mSetSq), sampleGroups = targets$description, main = "Normalized", legend = FALSE)
+legend("top", legend = levels(factor(targets$description)), text.col = viridis(212))
+```
+
+```{r Data Exploration}
+# MDS plots to look at largest sources of variation
+par(mfrow=c(1,2))
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", 
+        col=pal[factor(targets$Sample_Group)])
+legend("top", legend=levels(factor(targets$Sample_Group)), text.col=pal,
+       bg="white", cex=0.7)
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common",  
+        col=pal[factor(targets$Sample_Source)])
+legend("top", legend=levels(factor(targets$Sample_Source)), text.col=pal,
+       bg="white", cex=0.7)
+```
+

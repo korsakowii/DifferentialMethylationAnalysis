@@ -1,0 +1,54 @@
+---
+title: "DMA with Sesame (new)"
+author: "Xiaoyu Yan"
+date: "2/3/2020"
+output: rmarkdown::github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(sesame)
+library(ChAMP)
+library(tidyverse)
+data_dir <- "~/Desktop/Graduate/MethData"
+```
+
+```{r}
+directory <- read_csv(paste0(dataDirectory,"directory.csv"))
+tumor_gland <- directory %>% filter(description == "tumor gland")
+
+```
+```{r}
+sset_beta <- function(id, num) {
+  ssets_tumor_gland <- lapply(
+  searchIDATprefixes(paste0(data_dir, "tumor_gland")), readIDATpair)
+  
+ssets_beta <- function(id, num){
+  sset <- sapply(
+  lapply(
+  searchIDATprefixes(paste0(data_dir, id)), 
+  readIDATpair), 
+  function(pfx) {
+    pfx %>%
+    pOOBAH %>% # sets the p-value for each probe
+    noob #%>% # background subtraction based on normal-exponential deconvolution 
+    #dyeBiasCorrTypeINorm # correction nonlinear quantile interpolation with Type-I probes
+    }
+  )
+}
+beta <- getBetas(sset)
+return(c(sset, beta))
+}
+```
+
+```{r}
+betas <- vapply(sset, getBetas, numeric(1))
+```
+
+```{r}
+CpG.GUI(arraytype="EPIC")
+```
+

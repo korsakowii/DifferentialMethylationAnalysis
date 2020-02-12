@@ -1,0 +1,24 @@
+mkdir ~/Desktop/Graduate/MethData/colon_crypt
+cp 201980430165_R01C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 201980430165_R02C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250091_R01C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250091_R02C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250091_R03C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250091_R04C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250091_R07C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250017_R05C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250017_R06C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250017_R07C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202229250017_R08C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400041_R05C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400041_R06C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400041_R07C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400041_R08C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400112_R01C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400112_R02C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400112_R03C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202242400112_R04C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202835220052_R01C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202835220052_R02C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202835220052_R03C01*.* ~/Desktop/Graduate/MethData/colon_crypt
+cp 202835220052_R04C01*.* ~/Desktop/Graduate/MethData/colon_crypt

@@ -1,0 +1,17 @@
+plate,well_position,sentrix_id,sentrix_position,sample_id,description,tissue,age,sex,normal_7_19,jh_11_19
+1515,A02,202163530081,R01C01,UAG B 11,G10P7A3 56F endometrial gland,endometrial,56,female,TRUE,FALSE
+1515,B02,202163530081,R02C01,UAG M 13,G10P7A3 56F endometrial gland,endometrial,56,female,TRUE,FALSE
+1515,C02,202163530081,R03C01,UAG W 14,G10P7A3 56F endometrial gland,endometrial,56,female,TRUE,FALSE
+1515,D02,202163530081,R04C01,UAG W 15,G10P7A3 56F endometrial gland,endometrial,56,female,TRUE,FALSE
+1515,E02,202163530081,R05C01,UAH B 16,G8P8 55F endometrial gland,endometrial,55,female,TRUE,FALSE
+1515,F02,202163530081,R06C01,UAH B 17,G8P8 55F endometrial gland,endometrial,55,female,TRUE,FALSE
+1515,G02,202163530081,R07C01,UAH B 18,G8P8 55F endometrial gland,endometrial,55,female,TRUE,FALSE
+1515,H02,202163530081,R08C01,UAH B 20,G8P8 55F endometrial gland,endometrial,55,female,TRUE,FALSE
+1534,A03,202875000148,R01C01,UH L 13,G0P0 17F endometrial gland,endometrial,17,female,TRUE,FALSE
+1534,B03,202875000148,R02C01,UH L 14,G0P0 17F endometrial gland,endometrial,17,female,TRUE,FALSE
+1534,C03,202875000148,R03C01,UH 15,G0P0 17F endometrial gland,endometrial,17,female,TRUE,FALSE
+1534,D03,202875000148,R04C01,UH 16,G0P0 17F endometrial gland,endometrial,17,female,TRUE,FALSE
+1534,E03,202875000148,R05C01,UT 19,G12P11A1 85F endo gland,endometrial,85,female,TRUE,FALSE
+1534,F03,202875000148,R06C01,UT21,G12P11A1 85F endo gland,endometrial,85,female,TRUE,FALSE
+1534,G03,202875000148,R07C01,UT L 22,G12P11A1 85F endo gland,endometrial,85,female,TRUE,FALSE
+1534,H03,202875000148,R08C01,UT L 23,G12P11A1 85F endo gland,endometrial,85,female,TRUE,FALSE
