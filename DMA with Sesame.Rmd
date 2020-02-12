@@ -2,7 +2,9 @@
 title: "DMA with Sesame"
 author: "Xiaoyu Yan"
 date: "2/3/2020"
-output: rmdformats::html_clean
+output:
+  md_document:
+    variant: markdown_github
 ---
 
 ```{r setup, include=FALSE}
@@ -139,7 +141,6 @@ grid.arrange(CNV(5), CNV(6), CNV(7), CNV(8), nrow = 2, ncol = 2)
 ```{r}
 # individual P
 grid.arrange(CNV(1), CNV(2), CNV(3), CNV(4), nrow = 2, ncol = 2)
-```
 ```
 
 # Colon crypt
