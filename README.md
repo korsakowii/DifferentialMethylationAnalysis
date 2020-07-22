@@ -1,2 +1,2 @@
 # DifferentialMethylationAnalysis
-Differential Methylation Analysis with R packages
+Differential Methylation Analysis in Colon Tissue with R
