@@ -1,0 +1,1115 @@
+---
+title: "Tumor vs Crypt"
+author: "Xiaoyu Yan"
+date: "2/26/2020"
+output: github_document:
+  toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+library(RColorBrewer)
+library(dendextend)
+library(missMethyl)
+library(tidyverse)
+library(plotly)
+library(scales)
+library(sesame)
+library(ChAMP)
+library(ggsci)
+library(isva)
+data_dir <- "~/Desktop/Graduate/DifferentialMethylationAnalysis/"
+idat_dir <- paste0(data_dir, "Comparison 1")
+# font
+myfont <- list(family = 'Times New Roman', size = 12)
+```
+
+### Betas before quality control
+
+```{r}
+# Get betas
+betab <- do.call(cbind, lapply(searchIDATprefixes(idat_dir), function(pfx) {
+    pfx %>% readIDATpair %>% 
+    #pOOBAH %>% noob %>% dyeBiasCorrTypeINorm %>% 
+    getBetas
+}))
+#betas <- vapply(ssets, getBetas, numeric(1))
+targets <- read.metharray.sheet(idat_dir)
+pheno <- targets$Sample_Group
+```
+
+```{r Density plot}
+# Density plot        
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)[c(2,1)]
+dens <- apply(betab, 2, density, na.rm = TRUE)
+df <- data.frame(x = unlist(lapply(dens, "[[", "x")),
+                 y = unlist(lapply(dens, "[[", "y")),
+                 cut = rep(names(dens), each = length(dens[[1]]$x))
+                        )
+newdf <- do.call(rbind, 
+                 lapply(dens,function(x) c(x$x,x$y)))
+names(mycol) <- unique(pheno)
+newdf <- data.frame(newdf[, seq(1, 1024,by = 2)], 
+                    names(dens) ,
+                    mycol[pheno])
+
+p <- plot_ly()
+for(i in 1:nrow(newdf))
+  {
+  p <- add_trace(p,
+                 x = as.numeric(newdf[i,1:256]),  # x0, x1
+                 y = as.numeric(newdf[i,257:512]),  # y0, y1
+                 mode = "lines",
+                 line = list(
+                   shape = "spline", 
+                   color = newdf[i,514], 
+                   width = 2),
+                 showlegend = F,
+                 opacity = 0.5,
+                 hoverinfo = "text",
+# Create custom hover text
+                 text = newdf[i,513], 
+                 type="scatter")
+}
+
+m = list(l = 100, r = 50, b = 50, t = 100, pad = 10)
+p <- layout(p, 
+            title  = list(
+                    text = 'Density Plot for Each Sample (Before QC)'),
+            xaxis = list(title = 'Beta-value',
+                      zeroline = TRUE
+                      #range = c(0, 200)
+                      ),
+            yaxis = list(title = 'Probability Density'
+                      #range = c(-50,100)
+                      ),
+            legend = list(
+                    orientation = 'h', y = -0.3),
+                  margin = m, 
+                  font = myfont
+                  )
+fig4a <- p
+fig4a
+```
+
+### Betas after quality control
+
+```{r message=FALSE, warning=FALSE}
+betas <- do.call(cbind, lapply(searchIDATprefixes(idat_dir), function(pfx) {
+    pfx %>% readIDATpair %>% 
+    pOOBAH %>% noob %>% dyeBiasCorrTypeINorm %>% 
+    getBetas
+}))
+
+beta <- na.omit(betas)
+targets <- read.metharray.sheet(idat_dir)
+pheno <- targets$Sample_Group
+indiv <- targets$Individual
+id <-  targets$Sample_Name
+arraytype <- "EPIC"
+bVals <- beta
+colnames(bVals) <- targets$Sample_Name
+mVals <- BetaValueToMValue(bVals)
+```
+
+```{r Density plot}
+# Density plot
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)[c(2,1)]
+dens <- apply(bVals, 2, density, na.rm = TRUE)
+df <- data.frame(x = unlist(lapply(dens, "[[", "x")),
+                 y = unlist(lapply(dens, "[[", "y")),
+                 cut = rep(names(dens), each = length(dens[[1]]$x))
+                        )
+newdf <- do.call(rbind, 
+                 lapply(dens,function(x) c(x$x,x$y)))
+color_number <- length(unique(pheno))
+names(mycol) <- unique(pheno)
+newdf <- data.frame(newdf[, seq(1, 1024,by = 2)], 
+                    names(dens) ,
+                    mycol[pheno])
+
+p <- plot_ly()
+for(i in 1:nrow(newdf))
+  {
+  p <- add_trace(p,
+                 x = as.numeric(newdf[i,1:256]),  # x0, x1
+                 y = as.numeric(newdf[i,257:512]),  # y0, y1
+                 mode = "lines",
+                 line = list(
+                   shape = "spline", 
+                   color = newdf[i,514], 
+                   width = 2),
+                 showlegend = F,
+                 opacity = 0.5,
+                 hoverinfo = "text",
+# Create custom hover text
+                 text = newdf[i,513], 
+                 type="scatter")
+}
+
+m = list(l = 100, r = 50, b = 50, t = 100, pad = 10)
+
+p <- layout(p, 
+            title  = list(
+                    text = 'Density Plot for Each Sample (After QC)'),
+            xaxis = list(title = 'Beta-value',
+                      zeroline = TRUE
+                      #range = c(0, 200)
+                      ),
+            yaxis = list(title = 'Probability Density'
+                      #range = c(-50,100)
+                      ),
+            legend = list(
+                    orientation = 'h', y = -0.3),
+                  margin = m, 
+                  font = myfont
+                  )
+fig4b <- p
+fig4b
+```
+
+# Remove unwanted variation
+
+```{r}
+# Read IDATs into SigSet list
+ssets <- lapply(
+    searchIDATprefixes(idat_dir),
+    readIDATpair)
+ssets <- sapply(
+  ssets, function(pfx) {
+    pfx %>%
+    pOOBAH %>% # sets the p-value for each probe
+    noob %>% # background subtraction based on normal-exponential deconvolution 
+    dyeBiasCorrTypeINorm # correction nonlinear quantile interpolation with Type-I probes
+    }
+  )
+
+rgSet <- SigSetsToRGChannelSet(ssets)
+# get M-values for ALL probes
+M <- mVals
+# setup the factor of interest
+grp <- factor(targets$Sample_Group, labels = c(0,1))
+# extract Illumina negative control data
+INCs <- getINCs(rgSet)
+#head(INCs)
+
+# add negative control data to M-values
+Mc <- rbind(M,INCs)
+# create vector marking negative controls in data matrix
+ctl1 <- rownames(Mc) %in% rownames(INCs)
+table(ctl1)
+
+rfit1 <- RUVfit(Y = Mc, X = grp, ctl = ctl1) # Stage 1 analysis
+rfit2 <- RUVadj(Y = Mc, fit = rfit1)
+
+top1 <- topRUV(rfit2, num=Inf, p.BH = 1)
+head(top1)
+
+ctl2 <- rownames(M) %in% rownames(top1[top1$p.BH_X1.1 > 0.5,])
+table(ctl2)
+
+# Perform RUV adjustment and fit
+rfit3 <- RUVfit(Y = M, X = grp, ctl = ctl2, method = "ruv4", k=1) # Stage 2 analysis
+rfit4 <- RUVadj(Y = M, fit = rfit3)
+# Look at table of top results
+topRUV(rfit4)
+
+Madj <- getAdj(M, rfit3) # get adjusted values
+colnames(Madj) <- targets$Sample_Name
+Badj <- MValueToBetaValue(Madj)
+colnames(Badj) <- targets$Sample_Name
+colnames(M) <- targets$Sample_Name
+```
+
+```{r mds plot}
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)[1:2]
+o <- order(-matrixStats::rowVars(M))[1:1000]
+d <- dist(t(M[o, ]))
+fit <- cmdscale(d)
+
+data <- data.frame(x=fit[,1],y=fit[,2],
+                   pheno = pheno,
+                   Sample_Name = id)
+p <- plot_ly(data = data, x = ~x, y = ~y, 
+             text = ~Sample_Name, 
+             color = ~pheno, 
+             colors = ~mycol, 
+             type="scatter", 
+             mode = "text") %>% 
+  add_annotations(
+               text = list("Unadjusted M-value"),
+               x = 0.3,
+               y = 1,
+               yref = "paper",
+               xref = "paper",
+               xanchor = "middle",
+               yanchor = "bottom",
+               showarrow = FALSE,
+               font = list(size = 15))
+m = list(l = 100, r = 50, b = 50, t = 100, pad = 10)
+p <- layout(p, title = 'MDS 1000 most variable positions', margin=m, showlegend = T, 
+            xaxis = list(title = 'Principal Component 1',
+                      zeroline = TRUE,
+                      range = c(-200, 200)),
+            yaxis = list(title = 'Principal Component 2',
+                      range = c(-50,100)),
+            font = myfont)
+p4 <- p
+
+o <- order(-matrixStats::rowVars(Madj))[1:1000]
+d <- dist(t(Madj[o, ]))
+fit <- cmdscale(d)
+
+data <- data.frame(x = fit[,1], y = fit[,2],
+                   pheno = pheno, 
+                   Sample_Name=id)
+p <- plot_ly(data = data, x = ~x, y = ~y, 
+             text = ~Sample_Name, color = ~pheno, colors = ~mycol, type = "scatter", mode = "text") %>% 
+             add_annotations(
+               text = list("Adjusted M-value"),
+               x = 0.75,
+               y = 1,
+               yref = "paper",
+               xref = "paper",
+               xanchor = "middle",
+               yanchor = "bottom",
+               showarrow = FALSE,
+               font = list(size = 15))
+p <- layout(p, title = list('MDS 1000 most variable positions'), 
+            margin = m, showlegend = F, 
+            xaxis = list(title = 'Principal Component 1',
+                      zeroline = TRUE,
+                      range = c(-200, 200)),
+            yaxis = list(title = 'Principal Component 2',
+                      range = c(-50, 100)),
+            showlegend = T,
+            font = myfont)
+p5 <- p
+
+fig5 <- subplot(p4, p5, margin = 0.05, titleX = TRUE, titleY = TRUE)
+```
+
+
+```{r champ dmp}
+myDMP <- champ.DMP(beta = Madj, pheno = pheno, arraytype = "EPIC")
+```
+```{r}
+DMP <- myDMP[[1]]
+pvalueCutoff <- 0.05
+abslogFCCutoff <- 1
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)[c(5,1,2)]
+mydmp <- DMP[which(DMP$adj.P.Val <= pvalueCutoff & abs(DMP$logFC) >= abslogFCCutoff),]
+cat(dim(mydmp))
+### Generate Data for Heatmap
+myheatmapdata <- beta[rownames(mydmp),] 
+
+### Generate Data for cgi Barplot
+h.cgi <- rbind(AllProbe = table(as.factor(DMP$cgi)),
+                                   HyperProbe = table(
+                                     as.factor(mydmp$cgi)
+                                     [mydmp$logFC >= abslogFCCutoff]),
+                                   HypoProbe = table(
+                                     as.factor(mydmp$cgi)
+                                     [mydmp$logFC <= (-1)*abslogFCCutoff]))
+
+### Generate Data for feature Barplot
+h.feature <- rbind(AllProbe = table(as.factor(DMP$feature)),
+                                   HyperProbe = table(
+                                     as.factor(mydmp$feature)
+                                     [mydmp$logFC >= abslogFCCutoff]),
+                                   HypoProbe = table(
+                                     as.factor(mydmp$feature)
+                                     [mydmp$logFC <= (-1)*abslogFCCutoff]))
+
+### Generate Data for feature.cgi Barplot
+h.feature.cgi <- rbind(AllProbe = table(as.factor(DMP$feat.cgi)), 
+                       HyperProbe = table(as.factor(mydmp$feat.cgi)
+                                        [mydmp$logFC >= abslogFCCutoff]), 
+                       HypoProbe=table(as.factor(mydmp$feat.cgi)
+                                       [mydmp$logFC <= (-1)*abslogFCCutoff]))
+
+#######################                        
+data(MatchGeneName)
+innercgibarplot <- function(h)
+    {
+        h <- apply(h,1,function(x) if(sum(x>0)!=0) prop.table(x) else x)
+        h <- data.frame(cgi = rep(colnames(h), 
+                        each = nrow(h)),
+                        probe = rep(rownames(h),
+                                    ncol(h)),
+                        proportion = as.vector(h))
+        p <- plot_ly(data = h,
+                     x = ~probe, 
+                     y = ~proportion, 
+                     type = "bar", color = ~cgi,
+                     colors = mycol,
+                     showlegend = FALSE)
+        m = list(l = 70,r = 30,b = 50,t = 50,pad = 10)
+        p <- layout(p, #title = "Sig CpG Sites Distribution in CGIs", 
+                    margin = m,
+                    xaxis = list(title = ''
+                      ),
+                    yaxis = list(title = 'Proportion'
+                      ),
+                    font = myfont)
+        return(p)
+    }
+
+innerfeaturebarplot <- function(h)
+    {
+        h <- apply(h, 1, function(x) if(sum(x>0) != 0) prop.table(x) else x)
+        h <- data.frame(cgi = rep(colnames(h),
+                                each = nrow(h)),
+                        probe = rep(rownames(h),
+                                  ncol(h)),
+                        proportion = as.vector(h))
+        p <- plot_ly(data = h, 
+                     x = ~probe, 
+                     y = ~proportion, 
+                     type = "bar", 
+                     color = ~cgi, 
+                     colors = mycol,
+                     showlegend = FALSE)
+        m = list(l = 70,r = 30,b = 50,t = 50,pad = 10)
+        p <- layout(p, #title = "Sig CpG Sites Distribution in Gene Regions",
+                    margin = m, 
+                    xaxis = list(title = ''
+                      ),
+                    yaxis = list(title = 'Proportion'
+                      ),
+                    font = myfont)
+        return(p)
+    }
+    innerfeaturecgibarplot <- function(h)
+    {
+        h <- apply(h,1,function(x) if(sum(x>0)!=0) prop.table(x) else x)
+        h <- data.frame(cgi = rep(colnames(h),
+                        each = nrow(h)),
+                        probe = rep(rownames(h),
+                                    ncol(h)),
+                        proportion = as.vector(h))
+        p <- plot_ly(data = h,
+                     x = ~probe, 
+                     y = ~proportion, 
+                     type = "bar", 
+                     color = ~cgi,
+                     colors = mycol)
+        m = list(l = 70,r = 30,b = 100,t = 50,pad = 10)
+        p <- layout(p, #title = "Sig CpG Sites Distribution in CGIs - Gene Regions ", 
+                    margin = m, 
+                    xaxis = list(title = ''
+                      ),
+                    yaxis = list(title = 'Proportion'
+                      ),
+                    font = myfont)
+        return(p)
+    }
+innercgibarplot(h.cgi)
+innerfeaturebarplot(h.feature)
+p7 <- innerfeaturecgibarplot(h.feature.cgi)
+p6 <- subplot(innercgibarplot(h.cgi), innerfeaturebarplot(h.feature), margin = .04, shareY = T)
+
+fig6 <- subplot(p6, p7, 
+                nrows = 2, margin = .15, heights = c(0.5, 0.5),
+                titleX = T, titleY = T
+                ) %>% layout(annotations = list(
+ list(x = 0.01 , y = 1.05, 
+      text = "Sig CpG Sites Distribution in CGIs", showarrow = F, 
+      xref='paper', yref='paper', font = list(size = 15)),
+ list(x = 1.04 , y = 1.05, 
+      text = "Sig CpG Sites Distribution in Gene Regions", showarrow = F, 
+      xref='paper', yref='paper', font = list(size = 15)),
+ list(x = 0.5 , y = 0.45, 
+      text = "Sig CpG Sites Distribution in CGIs - Gene Regions", showarrow = F, 
+      xref='paper', yref='paper', font = list(size = 15)))
+)
+fig6
+```
+
+```{r cpgboxplot}
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)
+cpgboxplot <- function(x) {
+  cpgid <- rownames(myDMP[[1]])[x]
+  pvalueCutoff <- 0.05
+  abslogFCCutoff <- 1
+  beta <- Badj
+  mycpg <- data.frame(Beta_Value = beta[cpgid,],
+                      Pheno = pheno,
+                      Sample_Name = colnames(beta))
+  c <- mycpg
+  p <- c %>% 
+    plot_ly(showlegend = F) %>%
+    add_trace(#x = ~as.numeric(Pheno),
+              y = ~Beta_Value, 
+              color = ~Pheno,
+              colors = mycol[1:2],
+              text = ~Sample_Name, 
+              type = "box", 
+              boxpoints = "all",
+              marker = list(opacity = 0.5, size = 3),
+              jitter = 0.3#,
+              #pointpos = 0
+              ) %>% 
+    layout(title = list(paste("Boxplot for", 
+                              cpgid, 
+                              range = c(0,1))),
+           xaxis = list(zeroline = TRUE, 
+                        title = paste("colon.crypt", "tumor.gland"), 
+                        showticklabels = F),
+           yaxis = list(range = c(0,1)),
+           font = list(family = "sans serif"#, size = 12
+                       )) %>% 
+    add_annotations(
+      text = ~cpgid,
+      x = 0.5,
+      y = 0,
+      yref = "paper",
+      xref = "paper",
+      xanchor = "center",
+      yanchor = "bottom",
+      font = list(size = 15),
+      showarrow = F
+      )
+  #m = list(l = 70,r = 70,b = 50,t = 50,pad = 10)
+  #p <- layout(p, title = paste("Boxplot for",cpgid),margin=m)
+  p
+}
+lcpgboxplot <- function(x) {
+  cpgid <- rownames(myDMP[[1]])[x]
+  pvalueCutoff <- 0.05
+  abslogFCCutoff <- 1
+  beta <- Badj
+  mycpg <- data.frame(Beta_Value = beta[cpgid,],
+                      Pheno = pheno,
+                      Sample_Name = colnames(beta))
+  c <- mycpg
+  p <- c %>% 
+    plot_ly() %>%
+    add_trace(#x = ~as.numeric(Pheno),
+              y = ~Beta_Value, 
+              color = ~Pheno,
+              colors = mycol[1:2],
+              text = ~Sample_Name, 
+              type = "box", 
+              boxpoints = "all",
+              marker = list(opacity = 0.5, size = 3),
+              jitter = 0.3#,
+              #pointpos = 0
+              ) %>% 
+    layout(title = list(paste("Boxplot for", 
+                              cpgid, 
+                              range = c(0,1))),
+           xaxis = list(zeroline = TRUE, 
+                        title = paste("colon.crypt", "tumor.gland"), 
+                        showticklabels = F),
+           yaxis = list(range = c(0,1)),
+           font = list(family = "Times New Roman"),
+           legend = list(x = 0.35, y = -0.1, orientation = "h")) %>% 
+    add_annotations(
+      text = ~cpgid,
+      x = 0.5,
+      y = 1,
+      yref = "paper",
+      xref = "paper",
+      xanchor = "center",
+      yanchor = "bottom",
+      font = list(size = 15),
+      showarrow = F
+      )
+  #m = list(l = 70,r = 70,b = 50,t = 50,pad = 10)
+  #p <- layout(p, title = paste("Boxplot for",cpgid),margin=m)
+  p
+}
+p7 <- subplot(cpgboxplot(1), 
+              cpgboxplot(2), 
+              cpgboxplot(3), 
+              shareX = TRUE, 
+              shareY = TRUE
+              )
+fig7 <- subplot(p7, lcpgboxplot(4), widths = c(0.75, 0.25),
+                #margin = 0,
+                shareX = TRUE, 
+                shareY = TRUE# size = 12
+           )
+fig7
+```
+
+
+```{r champ dmp}
+#geneenrichmentplot
+mycol <- pal_lancet("lanonc", alpha = 0.5)(9)
+DMP <- myDMP[[1]]
+pvalueCutoff <- 0.05
+abslogFCCutoff <- 1
+mydmp <- DMP[which(DMP$adj.P.Val <= pvalueCutoff 
+                   & abs(DMP$logFC) >= abslogFCCutoff),]
+myallgeneselect <- mydmp[mydmp$gene != "",
+                         c("gene","adj.P.Val","logFC")]
+select <- myallgeneselect
+rank <- sort(table(select[,"gene"]), 
+             decreasing = TRUE)
+if(length(rank) > 70) 
+  rank <- rank[1:70]
+select <- select[select$gene %in% names(rank), ]
+select$logFC <- select$logFC > 0
+        
+h <- table(as.character(select$gene), 
+           select$logFC)
+h <- h[order(rowSums(h), 
+             decreasing = T),]
+colnames(h) <- c("Hypor","Hyper")
+h <- data.frame(Variance = rep(colnames(h), 
+                               each = nrow(h)),
+                gene = rep(rownames(h), 
+                           ncol(h)), 
+                Number = as.vector(h))
+p <- plot_ly(data = h, 
+             x = ~gene, 
+             y = ~Number, 
+             type = "bar", 
+             color = ~Variance,
+             colors = mycol[1:2],
+             showlegend = T)
+m = list(l = 70,r = 30,b = 150,t = 50,pad = 10)
+p <- layout(p, 
+            title = paste("Top ", length(rank),
+                          " Genes Mostly Influenced by DMPs",
+                          sep = ""),
+            barmode = "stack", 
+            legend = list(x = 0.85, y = 1, 
+                          orientation = "h"),
+            xaxis = list(title = 'Gene Id'),
+            yaxis = list(title = 'Number of CpGs', 
+                         range = c(0,360)),
+            font = myfont,
+            margin = m
+            )
+fig8 <- p
+fig8
+```
+
+```{r Geneplot}
+# select gene
+mycol <- brewer.pal(9, "Paired")[c(1, 5, 2, 6, 3, 7)]
+pvalueCutoff <- 0.05
+abslogFCCutoff <- 1
+geneName <- "ZNF331"
+beta <- Badj
+### Generate Data for Geneplot
+mygeneselect = DMP[which(DMP$gene == geneName 
+                       & DMP$adj.P.Val <= pvalueCutoff 
+                       & abs(DMP$logFC) >= abslogFCCutoff),]
+mygeneselect <- mygeneselect[order(mygeneselect$MAPINFO),]
+mygroup <- split(as.data.frame(t(beta[rownames(mygeneselect),])), pheno)
+
+#select <- select[order(select$MAPINFO),]
+Group <- mygroup
+select <- mygeneselect
+G <- lapply(Group,function(x) t(x))
+G <- lapply(G,function(h) data.frame(Sample = rep(colnames(h), 
+                                                  each = nrow(h)),
+                                     ID = rep(rownames(h),
+                                              ncol(h)), 
+                                     pos = rep(as.numeric(as.factor(select$MAPINFO)), 
+                                               ncol(h)), 
+                                     Value = as.vector(h)))
+for(i in 1:length(G)) 
+  G[[i]] <- data.frame(G[[i]], 
+                       pheno = names(G)[i])
+X <- do.call(rbind, G)
+X <- cbind(X, showtext = paste("cpgID:", X$ID, 
+                               "Sample:", X$Sample, 
+                               sep = ""))
+
+p <- X %>% 
+  plot_ly() %>% 
+  add_markers(x = ~jitter(pos), y = ~Value, color = ~pheno, colors = mycol,
+              marker = list(opacity = 0.9, size = 3),
+              hoverinfo = "text",
+              text = ~paste0("Group: ", pheno,
+                             "<br>xval: ", Value),
+              showlegend = FALSE) 
+  
+cat("<< Dots Plotted >>")
+
+Fit <- lapply(G,function(h) 
+  data.frame(pos = unique(h$pos), 
+             ID = unique(h$ID), 
+             Mean = aggregate(h$Value, 
+                              by = list(h$pos), 
+                              mean)[,2]))
+
+for(i in 1:length(Fit)) 
+  Fit[[i]] <- data.frame(Fit[[i]],
+                         pheno = paste0(names(Fit)[i], ".mean"))
+
+df <- data.frame(x = unlist(lapply(Fit, "[[", "pos")),
+                 y = unlist(lapply(Fit, "[[", "Mean")),
+                ID = unlist(lapply(Fit, "[[", "ID")),
+               cut = unlist(lapply(Fit, "[[", "pheno")))
+
+p <- add_trace(p, data = df, 
+               x = ~x, 
+               y = ~y, 
+               text = ~ID, 
+               type = "scatter", 
+               color = ~cut, 
+               colors = mycol,
+               mode = 'lines + markers', 
+               line = list(shape = "spline", 
+                           width = 2,
+                           opacity = 0.8), 
+               marker = list(size = 1))
+
+cat("<< Mean line Plotted >>")
+
+Fit2 <- lapply(G, function(h) 
+  data.frame(pos = unique(h$pos), 
+             ID = unique(h$ID),
+             Fitted = unique(fitted(loess(h$Value ~ h$pos)))))
+
+for(i in 1:length(Fit2)) 
+  Fit2[[i]] <- data.frame(Fit2[[i]], 
+                          pheno = paste0(names(Fit2)[i], ".loess"))
+
+df2 <- data.frame(x = unlist(lapply(Fit2, "[[", "pos")), 
+                  y = unlist(lapply(Fit2, "[[", "Fitted")),
+                  ID = unlist(lapply(Fit2, "[[", "ID")),
+                  cut = unlist(lapply(Fit2, "[[", "pheno")))
+
+p <- add_trace(p,data = df2, x = ~x, y = ~y, 
+                       text = ~ID, 
+                       color = ~cut,
+               colors = mycol,
+                       type="scatter", 
+                       mode = 'lines+markers',
+                       line = list(shape = "spline", 
+                                   width = 3, 
+                                   opacity = 1,
+                                   dash = "dash"), 
+                       marker = list(size = 1)) 
+        
+cat("<< Loess line Plotted >>")
+
+regioncol <- c("1stExon"="#AD002A7F", 
+               "3'UTR"="#ffff99", 
+               "5'UTR"="#925E9F7F",
+               "Body"="#FDAF917F", 
+               "IGR"="#00468B7F", 
+               "TSS1500"="#ADB6B67F", 
+               "TSS200"="#1B19197F")
+featureregion <- list()
+for(i in names(regioncol)) {
+  index <- which(select$feature == i)
+  if (length(index) == 0) 
+    next 
+  oldw <- getOption("warn")
+  options(warn = -1)
+  featureregion[[i]] <- data.frame(x1 = index - 0.5, 
+                                   x2 = index + 0.5,
+                                   y = -0.05,
+                                   IDfeature = i,
+                                   color = regioncol[i])
+  options(warn = oldw)
+  }
+
+cgicol <- c("island"="#7fc97f",
+            "opensea"="#0099B47F",
+            "shelf"="#fdc086",
+            "shore"="#fb9a99")
+
+cgiregion <- list()
+for(i in names(cgicol)) {
+  index <- which(select$cgi==i) 
+  if(length(index)==0) 
+    next 
+  oldw <- getOption("warn") 
+  options(warn = -1) 
+  cgiregion[[i]] <- data.frame(x1 = index - 0.5, 
+                               x2 = index + 0.5, 
+                               y = -0.1, 
+                               IDfeature = i, 
+                               color = cgicol[i])
+  options(warn = oldw)
+  }
+
+df <- rbind(do.call(rbind,featureregion),
+            do.call(rbind,cgiregion))
+colorrecord <- c()
+
+for(i in 1:nrow(df)){
+  legend = F
+  if(!df$color[i] %in% colorrecord)
+            {
+                colorrecord <- c(colorrecord,as.character(df$color[i]))
+                legend = T
+            }
+            p <- add_trace(p,
+                           x = c(df$x1[i], df$x2[i]),  # x0, x
+                           y = c(df$y[i],df$y[i]),  # y0, y1
+                           name = df$IDfeature[i],
+                           mode = "lines",
+                           line = list(color = df$color[i], colors = mycol,
+                                       width = 10 , opacity=0.5),
+                           showlegend = legend,
+                           hoverinfo = "text",
+                           # Create custom hover text
+                           text = df$IDfeature[i],
+                           type = "scatter"
+                           )
+        }
+cat("<< Cgi Bar Plotted >>")
+
+
+p <- layout(p, 
+            title = select$gene[1], 
+            legend = list(orientation = "h"),
+            xaxis = list(title = "Position", 
+                         showticklabels = F),
+            font = myfont
+            )
+fig9 <- p
+fig9
+```
+
+```{r}
+myDMR <- champ.DMP(beta = Madj, pheno = pheno, arraytype = "EPIC")
+```
+
+```{r}
+pvalueCutoff <- 0.05
+minprobeCutoff <- 0.05
+dmr.idx <- 1
+DMP <- myDMP[[1]]
+DMR <- myDMR
+data(probe.features.epic)
+probe.features <- probe.features[rownames(Badj),]
+DMR[[1]]$seqnames <- as.factor(substr(DMR[[1]]$seqnames,4,100))
+index <- apply(DMR[[1]],1,function(x) which(probe.features$CHR==x[1] & probe.features$MAPINFO >= as.numeric(x[2]) & probe.features$MAPINFO <= as.numeric(x[3])))
+Anno <- data.frame(DMRindex=unname(unlist(sapply(names(index),function(x) rep(x,length(index[[x]]))))),probe.features[do.call(c,index),1:8])
+
+### Generate Data for dmrplot
+mydmrselect <- Anno[Anno$DMRindex==paste("DMR",dmr.idx,sep="_"),]
+mydmrselect <- mydmrselect[order(mydmrselect$MAPINFO),]
+mygroup <- split(as.data.frame(t(Badj[rownames(mydmrselect),])),pheno)
+
+select <- mydmrselect
+Group <- mygroup
+
+innerdmrplot <- function(select,Group,dmr.idx)
+    {
+        cat("<< Generating dmrplot >>")
+        #select <- select[order(select$MAPINFO),]
+        G <- lapply(Group,function(x) t(x))
+        G <- lapply(G,function(h) data.frame(Sample=rep(colnames(h),each=nrow(h)),ID=rep(rownames(h),ncol(h)),pos=rep(as.numeric(as.factor(select$MAPINFO)),ncol(h)),Value=as.vector(h)))
+        for(i in 1:length(G)) G[[i]] <- data.frame(G[[i]],pheno=names(G)[i])
+        X <- do.call(rbind,G)
+        X <- cbind(X,showtext=paste("cpgID:",X$ID," Sample:",X$Sample,sep=""))
+        p <- plot_ly()
+        p <- add_trace(p,data=X, x=~pos, y=~Value,type="scatter", mode = "markers", text =~showtext,color=~pheno,marker=list(opacity = 0.6,size = 4))
+
+        cat("<< Dots Plotted >>")
+
+        Fit <- lapply(G,function(h) data.frame(pos=unique(h$pos),ID=unique(h$ID),Mean=aggregate(h$Value,by=list(h$pos),mean)[,2]))
+        for(i in 1:length(Fit)) Fit[[i]] <- data.frame(Fit[[i]],pheno=paste(names(Fit)[i],"Mean"))
+        df <- data.frame(x = unlist(lapply(Fit, "[[", "pos")),
+                         y = unlist(lapply(Fit, "[[", "Mean")),
+                         ID = unlist(lapply(Fit, "[[", "ID")),
+                         cut = unlist(lapply(Fit, "[[", "pheno")))
+        p <- add_trace(p,data=df, x =~x, y =~y, text =~ID,type="scatter",mode="lines+markers", color =~cut,line = list(shape = "spline",width = 3,opacity = 0.3),marker=list(size = 1))
+
+        cat("<< Mean line Plotted >>")
+
+        Fit2 <- lapply(G,function(h) data.frame(pos=unique(h$pos),ID=unique(h$ID),Fitted=unique(fitted(loess(h$Value ~ h$pos)))))
+        for(i in 1:length(Fit2)) Fit2[[i]] <- data.frame(Fit2[[i]],pheno=paste(names(Fit2)[i],"Loess"))
+        df2 <- data.frame(x = unlist(lapply(Fit2, "[[", "pos")),
+                         y = unlist(lapply(Fit2, "[[", "Fitted")),
+                         ID = unlist(lapply(Fit2, "[[", "ID")),
+                         cut = unlist(lapply(Fit2, "[[", "pheno")))
+        p <- add_trace(p,data=df2, x =~x, y =~y, text =~ID,type="scatter",mode="lines+markers", color =~cut,line =list(shape ="spline",width=3,opacity=0.7,dash = "dash"),marker=list(size = 1))
+
+        cat("<< Loess line Plotted >>")
+
+        regioncol <- c("1stExon"="#00eeee","3'UTR"="#8b008b","5'UTR"="#00ee00","Body"="#ffd700","IGR"="#9e9e9e","TSS1500"="#ff3030","TSS200"="#00688b")
+        featureregion <- list()
+        for(i in names(regioncol))
+        {
+            index <- which(select$feature==i)
+            if(length(index)==0) next
+            oldw <- getOption("warn")
+            options(warn = -1)
+            featureregion[[i]]<- data.frame(x1 = index-0.5,
+                                            x2 = index+0.5,
+                                            y = -0.05,
+                                            IDfeature = i,
+                                            color = regioncol[i])
+            options(warn = oldw)
+        }
+        cgicol <- c("island"="#ff83fa","opensea"="#ffdab9","shelf"="#bbffff","shore"="#98fb98")
+        cgiregion <- list()
+        for(i in names(cgicol))
+        {
+            index <- which(select$cgi==i)
+            if(length(index)==0) next
+            oldw <- getOption("warn")
+            options(warn = -1)
+            cgiregion[[i]]<- data.frame(x1 = index-0.5,
+                                        x2 = index+0.5,
+                                        y = -0.1,
+                                        IDfeature = i,
+                                        color = cgicol[i])
+            options(warn = oldw)
+        }
+        #############################################
+        df <- rbind(do.call(rbind,featureregion),do.call(rbind,cgiregion))
+        colorrecord <- c()
+        for(i in 1:nrow(df))
+        {
+            legend = F
+            if(!df$color[i] %in% colorrecord)
+            {
+                colorrecord <- c(colorrecord,as.character(df$color[i]))
+                legend = T
+            }
+            p <- add_trace(p,
+                           x = c(df$x1[i], df$x2[i]),  # x0, x
+                           y = c(df$y[i],df$y[i]),  # y0, y1
+                           name = df$IDfeature[i],
+                           mode = "lines",
+                           line = list(color = df$color[i], width = 10 , opacity=0.5),
+                           showlegend = legend,
+                           hoverinfo = "text",
+                           # Create custom hover text
+                           text = df$IDfeature[i],
+                           type="scatter")
+        }
+        p <- layout(p, title = paste("DMR",dmr.idx,sep="_"))
+    }
+
+```
+
+
+```{r}
+cfr <- DMR(beta, targets, ~Sample_Group, platform = "EPIC")
+topSegments(cfr[[1]])
+```
+
+```{r}
+myGSEA <- champ.GSEA(beta=beta,DMP = myDMP[[1]], DMR = myDMR, arraytype="EPIC",adjPval=0.05, method="fisher")
+myebayGSEA <- champ.ebGSEA(beta = beta, pheno = pheno, arraytype = "EPIC")
+```
+
+```{r}
+# dendrogram plot
+
+if(ncol(beta) <= 10)
+        {
+            hc <- hclust(dist(t(beta)))
+        }else
+        {
+            SVD <- svd(beta)
+            rmt.o <- EstDimRMT(beta - rowMeans(beta))
+            k <- rmt.o$dim
+            if(k < 2) k <- 2
+            M <- SVD$v[,1:k]
+            rownames(M) <- id #colnames(beta)
+            colnames(M) <- paste("Component",c(1:k))
+            hc <- hclust(dist(M))
+        }
+        dend <- as.dendrogram(hc)
+        MyColor <- rainbow(length(table(pheno)))
+        names(MyColor) <- names(table(pheno))
+        labels_colors(dend) <- MyColor[pheno[order.dendrogram(dend)]]
+        dend <- dend %>% set("labels_cex",0.8)
+        dend <- dend %>% set("leaves_pch", 19) %>% set("leaves_cex",0.6) %>% set("leaves_col",MyColor[pheno[order.dendrogram(dend)]])
+
+        plot(dend,center=TRUE,main=paste("Dendrogram for ",nrow(beta), " probes",sep=""))
+        legend("topright",fill=MyColor,legend=names(MyColor))     
+
+# Heatmap 
+colnames(beta) <- targets$Sample_Name
+if(nrow(beta) < 1000) ncpg <- nrow(beta) else ncpg <- 1000
+        o <- order(-matrixStats::rowVars(beta))[1:ncpg]
+        data <- beta[o,]
+        a <- hclust(dist(data))$order
+        b <- hclust(dist(t(data)))$order
+        data <- data[a,b]
+        m = list(l = 200,r = 50,b = 50,t = 100,pad = 10)
+        p <- plot_ly(z = data,x = colnames(data), y = rownames(data), type = "heatmap")
+        p <- layout(p, title = paste("Heatmap for top ",ncpg," variable CpGs",sep=""),margin=m)   
+p3 <- p        
+```
+
+```{r}
+myNorm <- champ.norm(beta=myLoad$beta, arraytype="EPIC")
+champ.runCombat()
+champ.QC()
+#champ.SVD()
+# If Batch detected, run champ.runCombat() here.This data is not suitable.
+
+myDMP <- champ.DMP(arraytype="EPIC")
+DMP.GUI()
+```
+```{r}
+myDMR <- champ.DMR(arraytype="EPIC")
+#DMR.GUI(arraytype="EPIC")
+myBlock <- champ.Block(arraytype="EPIC")
+#Block.GUI(arraytype="EPIC") # For this simulation data, not Differential Methylation Block is detected.
+myGSEA <- champ.GSEA(arraytype="EPIC")
+myEpiMod <- champ.EpiMod(arraytype="EPIC")
+``` 
+
+```{r}
+tissuetype <- factor(targets$Sample_Group)
+individual <- factor(targets$Individual)
+designM <- model.matrix(~0+tissuetype+individual, data = targets)
+colnames(designM) <- c(levels(tissuetype), levels(individual)[-1])
+fit <- lmFit(mVals, designM)
+contM <- makeContrasts(tumor.gland-colon.crypt, 
+                            levels = designM)
+fit2 <- contrasts.fit(fit, contM)
+fit2 <- eBayes(fit2)
+
+# look at the numbers of DM CpGs at FDR < 0.05
+summary(decideTests(fit2))
+#       colon.crypt - tumor.gland
+#Down                       55812
+#NotSig                    465674
+#Up                         24294
+vennDiagram(decideTests(fit2))
+```
+
+```{r}
+# get the table of results for the contrast
+annEpic <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+annEpicSub <- annEpic[which((rownames(mVals) %in% annEpic$Name) == TRUE), c(1:4,12:19,24:ncol(annEpic))]
+DMPs <- topTable(fit2, num = Inf, coef = 1, genelist = annEpic)
+head(DMPs)
+#write.table(DMPs, file="DMPs.csv", sep=",", row.names=FALSE)
+par(mfrow=c(2,2))
+sapply(rownames(DMPs)[1:4], function(){
+  plot(bVals, cpg=cpg, pheno=targets$Sample_Group, ylab = "Beta values")
+})
+```
+
+```{r}
+target1 <- targets[which(targets$Sample_Group %in% c("tumor.gland", "colon.crypt")),]
+mVal1 <- mVals[, target1$Sample_Name]
+tissuetype <- factor(target1$Sample_Group)
+individual <- factor(target1$Individual)
+design <- model.matrix(~0+tissuetype+individual, data = target1)
+colnames(design) <- c(levels(tissuetype), levels(individual)[-1])
+fit <- lmFit(mVal1, design)
+contMatrix <- makeContrasts(tumor.gland-colon.crypt, levels = design)
+fit2 <- contrasts.fit(fit, contMatrix)
+fit2 <- eBayes(fit2)
+```
+
+```{r}
+designm <- model.matrix(~tissuetype+individual, data = targets)
+
+myAnnotation <- cpg.annotate(datatype = "array",  object = Madj, what = "M", annotation = "ilmn10b4.hg19", arraytype = "EPIC", analysis.type = "differential", design = designM, contrasts = TRUE, cont.matrix = contM, coef = "tumor.gland - colon.crypt")
+```
+
+```{r}
+DMRs <- dmrcate(myAnnotation, lambda=1000, C=2)
+results.ranges <- extractRanges(DMRs)
+#results.ranges
+```
+
+```{r}
+# set up the grouping variables and colours
+pal <- brewer.pal(8,"Dark2")
+groups <- pal[1:length(unique(targets$Sample_Group))]
+names(groups) <- levels(factor(targets$Sample_Group))
+cols <- groups[as.character(factor(targets$Sample_Group))]
+```
+
+```{r}
+# draw the plot for the top DMR
+dev.new(width=14, height=10, noRStudioGD=T) 
+#par(mfrow=c(1,1))
+DMR.plot(ranges = results.ranges, dmr = 1, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 2, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 3, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 4, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 5, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 6, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+DMR.plot(ranges = results.ranges, dmr = 7, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+```
+
+the plot shows the location of the DMR in the genome, the position of any genes that are nearby, the base pair positions of the CpG probes, the methylation levels of the individual samples as a heatmap and the mean methylation levels for the various sample groups in the experiment. This plot shows one of the DMRs identified by the DMRcate analysis.
+
+```{r}
+dev.new(width=4, height=10, noRStudioGD=T) 
+DMR.plot(ranges = results.ranges, dmr = 5, CpGs = Badj, phen.col = cols, 
+         what = "Beta", arraytype = "EPIC", genome = "hg19")
+
+```
+
+```{r}
+# indicate which genome is being used
+gen <- "hg19"
+# the index of the DMR that we will plot 
+dmrIndex <- 1
+# extract chromosome number and location from DMR results 
+chrom <- as.character(seqnames(results.ranges[dmrIndex]))
+start <- as.numeric(start(results.ranges[dmrIndex]))
+end <- as.numeric(end(results.ranges[dmrIndex]))
+# add 25% extra space to plot
+minbase <- start - (0.25*(end-start))
+maxbase <- end + (0.25*(end-start))
+```
+
+
+```{r}
+#10000 CpGs 1 fdr
+top <- topRUV(rfit4, number = Inf, p.BH = 1)
+table(top$p.BH_X1.1 < 0.01)
+
+beta <- beta[match(rownames(top),rownames(beta)),]
+beta_norm <- rowMeans(beta[,grp==0])
+beta_can <- rowMeans(beta[,grp==1])
+Delta_beta <- beta_can - beta_norm
+sigDM <- top$p.BH_X1.1 < 0.01 & abs(Delta_beta) > 0.25
+table(sigDM)
+
+```
+```{r}
+topCpGs <- topRUV(rfit4, number = 10000)
+# Get the significant CpG sites at less than 5% FDR
+#sigCpGs <- rownames(myDMP[[1]])[myDMP[[1]]$adj.P.Val<0.01]
+# First 10 signif
+sigCpGs <- rownames(topCpGs)
+# Total number of significant CpGs at 5% FDR
+length(sigCpGs)
+```
+
+
+```{r}
+# Get all the CpG sites used in the analysis to form the background
+all <- rownames(top)
+# Total number of CpG sites tested
+length(all)
+```
+
+```{r}
+library(missMethyl)
+par(mfrow=c(1,1))
+mydmp <- DMP[which(DMP$adj.P.Val <= pvalueCutoff & abs(DMP$logFC) >= abslogFCCutoff),]
+gst <- gometh(sig.cpg=rownames(mydmp), plot.bias=TRUE, array.type ="EPIC")
+
+```
+
+```{r}
+topgsa <- topGSA(gst)
+```
+
