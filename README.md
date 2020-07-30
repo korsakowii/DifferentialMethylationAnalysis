@@ -1,2 +1,2 @@
 # DifferentialMethylationAnalysis
-Differential Methylation Analysis in Colon Tissue with R
+Differential Methylation Analysis in Colon Tissues with R
